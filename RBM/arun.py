@@ -83,3 +83,121 @@ if __name__ == "__main__":
     plt.title('Mel Spectrogram')
     plt.savefig('spectrogram.png')
     plt.close()
+
+
+
+
+
+
+
+
+
+
+import tensorflow as tf
+from tensorflow.keras import layers, models
+import numpy as np
+
+# Sample corpus (replace with your own text data if needed)
+corpus = """
+The quick brown fox jumps over the lazy dog. 
+The dog sleeps while the fox runs fast.
+"""
+
+# Parameters
+n_words = 3  # Number of input words to predict the next word
+max_vocab_size = 1000  # Maximum vocabulary size
+embedding_dim = 50  # Size of embedding vectors
+sequence_length = n_words  # Length of input sequences
+
+# Step 1: Preprocess the text
+# Split corpus into words
+words = corpus.lower().split()
+unique_words = list(set(words))
+
+# Step 2: Create sequences of n words + next word
+def create_sequences(words, n):
+    sequences = []
+    targets = []
+    for i in range(len(words) - n):
+        seq = words[i:i + n]
+        target = words[i + n]
+        sequences.append(' '.join(seq))
+        targets.append(target)
+    return sequences, targets
+
+input_sequences, target_words = create_sequences(words, n_words)
+
+# Step 3: Vectorize the text
+# Use TextVectorization to convert words to integers
+vectorize_layer = layers.TextVectorization(
+    max_tokens=max_vocab_size,
+    output_mode='int',
+    output_sequence_length=sequence_length
+)
+
+# Adapt the vectorizer to the input sequences
+vectorize_layer.adapt(input_sequences)
+
+# Vectorize input sequences
+X = vectorize_layer(input_sequences).numpy()
+
+# Vectorize target words (single words)
+target_vectorizer = layers.TextVectorization(
+    max_tokens=max_vocab_size,
+    output_mode='int',
+    output_sequence_length=1
+)
+target_vectorizer.adapt(target_words)
+y = target_vectorizer(target_words).numpy().flatten()
+
+# Step 4: Build the LSTM model
+def build_lstm_model(vocab_size, embedding_dim, sequence_length):
+    model = models.Sequential([
+        # Embedding layer to convert word indices to dense vectors
+        layers.Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=sequence_length),
+        # LSTM layer to learn sequential patterns
+        layers.LSTM(64, return_sequences=False),
+        # Dense layer for classification
+        layers.Dense(64, activation='relu'),
+        layers.Dense(vocab_size, activation='softmax')  # Output probability for each word
+    ])
+    
+    model.compile(optimizer='adam',
+                  loss='sparse_categorical_crossentropy',
+                  metrics=['accuracy'])
+    return model
+
+# Get vocabulary size
+vocab_size = len(vectorize_layer.get_vocabulary())
+
+# Build and summarize the model
+model = build_lstm_model(vocab_size, embedding_dim, sequence_length)
+model.summary()
+
+# Step 5: Train the model
+model.fit(X, y, epochs=50, batch_size=16, verbose=1)
+
+# Step 6: Function to predict the next word
+def predict_next_word(model, input_text, vectorize_layer, target_vectorizer):
+    # Preprocess input text
+    input_seq = vectorize_layer([input_text]).numpy()
+    # Predict
+    pred = model.predict(input_seq, verbose=0)
+    # Get the predicted word index
+    pred_index = np.argmax(pred[0])
+    # Convert index to word
+    vocab = target_vectorizer.get_vocabulary()
+    return vocab[pred_index]
+
+# Example prediction
+test_input = "the quick brown"  # Example input of n_words
+predicted_word = predict_next_word(model, test_input, vectorize_layer, target_vectorizer)
+print(f"Input: {test_input}")
+print(f"Predicted next word: {predicted_word}")
+
+
+
+
+
+
+
